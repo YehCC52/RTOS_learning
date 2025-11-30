@@ -1,31 +1,62 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include <stdio.h>
+#include "event_groups.h"
 
-TaskHandle_t xHandlerTaskHandle = NULL;
+EventGroupHandle_t xEventGroup;
 
-void vNotifierTask(void *pvParameters){
+#define BIT_TASK1_DONE (1 << 0)
+#define BIT_TASK2_DONE (1 << 1)
+#define BIT_ALL_TASKS_DONE (BIT_TASK1_DONE | BIT_TASK2_DONE)
+
+void vTask1(void *pvParameters){
     while (1){
-        printf("notifier: Sending task notification\n");
-        xTaskNotifyGive(xHandlerTaskHandle);
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        printf("Task1: doing work...\n");
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        printf("Task1: setting BIT_TASK1_DONE\n");
+        xEventGroupSetBits(xEventGroup, BIT_TASK1_DONE);
     }
 }
 
-void vHandlerTask(void *pvParameters){
+void vTask2(void *pvParameters){
     while (1){
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        printf("Handler: Received notification and processing task\n");
+        printf("Task2: doing work...\n");
+        vTaskDelay(pdMS_TO_TICKS(1500));
+        printf("Task2: setting BIT_TASK2_DONE\n");
+        xEventGroupSetBits(xEventGroup, BIT_TASK2_DONE);
+    }
+}
+
+void vTaskSync(void *pvParameters){
+    while (1){
+        printf("SyncTask: watting for both tasks to complete\n");
+        xEventGroupWaitBits(
+            xEventGroup,
+            BIT_ALL_TASKS_DONE,
+            pdTRUE,
+            pdTRUE,
+            portMAX_DELAY
+        );
+        printf("SyncTask: all tasks done, proceeding\n");
     }
 }
 
 int main(void){
-    xTaskCreate(vHandlerTask, "Handler", 1000, NULL, 2, &xHandlerTaskHandle);
-    xTaskCreate(vNotifierTask, "Notifier", 1000, NULL, 1, NULL);
+    printf("TaskN: Event Group synchronization demo start\n");
+
+    xEventGroup = xEventGroupCreate();
+    if (xEventGroup == NULL){
+        printf("Failed to create event group\n");
+        return 1;
+    }
+
+    xTaskCreate(vTask1, "Task1", 1000, NULL, 1, NULL);
+    xTaskCreate(vTask2, "Task2", 1000, NULL, 1, NULL);
+    xTaskCreate(vTaskSync, "SyncTask", 1000, NULL, 2, NULL);
 
     vTaskStartScheduler();
 
-   
+    for(;;);
     return 0;
 }
 

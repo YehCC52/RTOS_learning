@@ -65,6 +65,7 @@
 #define configSUPPORT_DYNAMIC_ALLOCATION           1
 
 #define configUSE_STATS_FORMATTING_FUNCTIONS       0
+#define configUSE_EVENT_GROUPS                     1
 /* The following 2  memory allocation schemes are possible for this demo:
  *
  * 1. Dynamic Only.

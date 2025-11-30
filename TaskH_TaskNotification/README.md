@@ -1,19 +1,19 @@
-# Task H - 使用 Task Notification 實作任務同步 (取代 Semaphore 的輕量替代方案)
+# Task N - 使用 Event Group 同步多任務狀態
 
 ## 任務說明
 
-本範例學習如何使用 FreeRTOS 提供的輕量級同步機制 **Task Notification**，在兩個任務間進行事件觸發與等待。
+本範例學習如何透過 **FreeRTOS 的 Event Group** 機制，讓多個任務完成特定工作後再喚醒另一任務執行。這是一種常見的同步邏輯，例如：等待多個感測器完成初始化、或等多個子任務結束後再整合處理。
 
-這個機制可以在不額外使用 semaphore、queue 或其他 RTOS 資源的情況下，完成類似同步行為，且效能更高。
+Event Group 提供 24 個可設定的事件位元 (bits)，讓任務之間可依條件進行同步與通訊。
 
 ---
 
 ## 學習目標
 
-- 了解什麼是 Task Notification，以及與 semaphore 的差異。
-- 學習使用 `xTaskNotifyGive()` 來通知任務。
-- 使用 `ulTaskNotifyTake()` 讓任務等待特定事件發生。
-- 強化任務間的事件傳遞觀念。
+- 學會使用 `xEventGroupSetBits()` 來設定特定事件位元。
+- 使用 `xEventGroupWaitBits()` 讓任務等待多個事件完成。
+- 掌握「多任務完成 → 同步執行下一步」的典型設計模式。
+- 熟悉 FreeRTOS Event Group 的 AND / OR 條件等待邏輯。
 
 ---
 
@@ -21,19 +21,19 @@
 
 | API | 說明 |
 |-----|------|
-| `xTaskNotifyGive()` | 向目標任務發送一個「通知」訊號 |
-| `ulTaskNotifyTake(clearOnExit, timeout)` | 等待一個通知，類似於 `xSemaphoreTake()` |
-| `pdTRUE` | 表示接收到通知後會自動清除計數值 |
-| `portMAX_DELAY` | 任務會無限期等待直到接收到通知 |
+| `xEventGroupCreate()` | 建立一個事件群組 (event group) |
+| `xEventGroupSetBits(group, bits)` | 將指定的位元設為 1（代表某事件已完成） |
+| `xEventGroupWaitBits(group, bitsToWaitFor, clearOnExit, waitForAllBits, timeout)` | 阻塞任務直到事件發生 |
+| `pdTRUE` | 常用參數，表示條件滿足後自動清除相應位元 |
+| `portMAX_DELAY` | 無限期等待事件發生 |
 
-Task Notification 是內建在 Task Control Block 中的位元欄位，比 Semaphore 更省資源與高效。
+Event Group 本質上是 24-bit 的共享變數，適合條件式同步，但不適合傳送資料內容（適合使用 queue）。
 
 ---
 
 ## 任務架構說明
 
-- **NotifierTask**：每 2 秒呼叫一次 `xTaskNotifyGive()`，通知 HandlerTask。
-- **HandlerTask**：透過 `ulTaskNotifyTake()` 阻塞等待通知，一旦收到通知便執行對應任務。
+- **Task1**：模擬第一個任務完成，設定 `BIT_TASK1_DONE`。
+- **Task2**：模擬第二個任務完成，設定 `BIT_TASK2_DONE`。
+- **SyncTask**：透過 `xEventGroupWaitBits()` 等待 Task1 與 Task2 都完成後再繼續執行。
 
-```text
-[NotifierTask] ---> (Task Notification) ---> [HandlerTask]
